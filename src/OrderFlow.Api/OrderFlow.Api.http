@@ -1,0 +1,37 @@
+@baseUrl = http://localhost:5138
+@orderId = 00000000-0000-0000-0000-000000000000
+
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+
+{
+  "customerId": "6f1c2a8e-3b4d-4e5f-9a1b-2c3d4e5f6a7b",
+  "items": [
+    { "productId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "quantity": 2, "unitPrice": 10.50 },
+    { "productId": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e", "quantity": 1, "unitPrice": 3.00 }
+  ]
+}
+
+###
+
+GET {{baseUrl}}/api/orders/{{orderId}}
+
+###
+
+GET {{baseUrl}}/api/orders?status=Created&page=1&pageSize=20
+
+###
+
+POST {{baseUrl}}/api/orders/{{orderId}}/confirm
+
+###
+
+POST {{baseUrl}}/api/orders/{{orderId}}/ship
+
+###
+
+POST {{baseUrl}}/api/orders/{{orderId}}/cancel
+
+###
+
+GET {{baseUrl}}/health/ready

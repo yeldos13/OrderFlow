@@ -19,6 +19,16 @@ public static class DependencyInjection
 
         services.AddScoped<IOrderFlowDbContext>(provider => provider.GetRequiredService<OrderFlowDbContext>());
 
+        services.AddHealthChecks()
+            .AddDbContextCheck<OrderFlowDbContext>("database", tags: [HealthCheckTags.Ready]);
+
         return services;
+    }
+
+    public static async Task ApplyMigrationsAsync(this IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
+    {
+        await using var scope = serviceProvider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<OrderFlowDbContext>();
+        await dbContext.Database.MigrateAsync(cancellationToken);
     }
 }
