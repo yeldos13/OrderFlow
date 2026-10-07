@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using OrderFlow.Api.ErrorHandling;
+using OrderFlow.Api.Idempotency;
 using OrderFlow.Application;
 using OrderFlow.Infrastructure;
 using Scalar.AspNetCore;
@@ -36,7 +37,7 @@ try
 
     builder.Services.AddProblemDetails();
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-    builder.Services.AddOpenApi();
+    builder.Services.AddOpenApi(options => options.AddOperationTransformer<IdempotencyHeaderOperationTransformer>());
 
     var app = builder.Build();
 

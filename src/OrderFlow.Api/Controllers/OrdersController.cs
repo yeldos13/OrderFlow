@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using OrderFlow.Api.Idempotency;
 using OrderFlow.Application.Common;
 using OrderFlow.Application.Orders;
 using OrderFlow.Application.Orders.Dtos;
@@ -10,8 +11,10 @@ namespace OrderFlow.Api.Controllers;
 public sealed class OrdersController(IOrderService orderService) : ControllerBase
 {
     [HttpPost]
+    [Idempotent]
     [ProducesResponseType<OrderResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<OrderResponse>> Create(CreateOrderRequest request, CancellationToken cancellationToken)
     {
