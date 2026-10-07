@@ -1,5 +1,6 @@
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using OrderFlow.Application.Abstractions;
 using OrderFlow.Application.Common;
 using OrderFlow.Application.Orders.Dtos;
@@ -7,11 +8,12 @@ using OrderFlow.Domain.Orders;
 
 namespace OrderFlow.Application.Orders;
 
-internal sealed class OrderService(
+internal sealed partial class OrderService(
     IOrderFlowDbContext dbContext,
     IValidator<CreateOrderRequest> createOrderValidator,
     IValidator<GetOrdersQuery> getOrdersValidator,
-    TimeProvider timeProvider) : IOrderService
+    TimeProvider timeProvider,
+    ILogger<OrderService> logger) : IOrderService
 {
     public async Task<OrderResponse> CreateAsync(CreateOrderRequest request, CancellationToken cancellationToken)
     {
@@ -22,6 +24,8 @@ internal sealed class OrderService(
 
         dbContext.Orders.Add(order);
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        LogOrderCreated(order.Id, order.CustomerId, order.Items.Count, order.TotalAmount);
 
         return order.ToResponse();
     }
@@ -86,8 +90,17 @@ internal sealed class OrderService(
             .FirstOrDefaultAsync(order => order.Id == id, cancellationToken)
             ?? throw new NotFoundException(nameof(Order), id);
 
+        var previousStatus = order.Status;
         change(order, timeProvider.GetUtcNow());
 
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        LogOrderStatusChanged(order.Id, previousStatus, order.Status);
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Order {OrderId} created for customer {CustomerId} with {ItemCount} items, total {TotalAmount}")]
+    private partial void LogOrderCreated(Guid orderId, Guid customerId, int itemCount, decimal totalAmount);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Order {OrderId} status changed from {PreviousStatus} to {Status}")]
+    private partial void LogOrderStatusChanged(Guid orderId, OrderStatus previousStatus, OrderStatus status);
 }
