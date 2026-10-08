@@ -1,6 +1,9 @@
+using OrderFlow.Domain.Common;
+using OrderFlow.Domain.Orders.Events;
+
 namespace OrderFlow.Domain.Orders;
 
-public sealed class Order
+public sealed class Order : AggregateRoot
 {
     private readonly List<OrderItem> _items = [];
 
@@ -63,14 +66,28 @@ public sealed class Order
 
         order.TotalAmount = order._items.Sum(item => item.LineTotal);
 
+        order.Raise(new OrderCreatedDomainEvent(order.Id, order.CustomerId, order.TotalAmount, [.. lines], now));
+
         return order;
     }
 
-    public void Confirm(DateTimeOffset now) => TransitionTo(OrderStatus.Confirmed, now);
+    public void Confirm(DateTimeOffset now)
+    {
+        TransitionTo(OrderStatus.Confirmed, now);
+        Raise(new OrderConfirmedDomainEvent(Id, now));
+    }
 
-    public void Ship(DateTimeOffset now) => TransitionTo(OrderStatus.Shipped, now);
+    public void Ship(DateTimeOffset now)
+    {
+        TransitionTo(OrderStatus.Shipped, now);
+        Raise(new OrderShippedDomainEvent(Id, now));
+    }
 
-    public void Cancel(DateTimeOffset now) => TransitionTo(OrderStatus.Cancelled, now);
+    public void Cancel(DateTimeOffset now)
+    {
+        TransitionTo(OrderStatus.Cancelled, now);
+        Raise(new OrderCancelledDomainEvent(Id, now));
+    }
 
     private void TransitionTo(OrderStatus targetStatus, DateTimeOffset now)
     {

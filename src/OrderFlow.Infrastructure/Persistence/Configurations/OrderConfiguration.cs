@@ -25,6 +25,8 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property<uint>("Version")
             .IsRowVersion();
 
+        builder.Ignore(order => order.DomainEvents);
+
         builder.HasMany(order => order.Items)
             .WithOne()
             .HasForeignKey("OrderId")
