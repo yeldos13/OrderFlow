@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using OrderFlow.Application.Abstractions;
 using OrderFlow.Application.Idempotency;
 using OrderFlow.Infrastructure.Idempotency;
+using OrderFlow.Infrastructure.Messaging;
 using OrderFlow.Infrastructure.Outbox;
 using OrderFlow.Infrastructure.Persistence;
 
@@ -36,6 +37,23 @@ public static class DependencyInjection
 
         services.AddScoped<IIdempotencyStore, EfIdempotencyStore>();
         services.AddHostedService<IdempotencyCleanupService>();
+
+        services.AddOptions<KafkaOptions>()
+            .BindConfiguration(KafkaOptions.SectionName)
+            .Validate(options => !string.IsNullOrWhiteSpace(options.BootstrapServers), "Kafka bootstrap servers are not configured.")
+            .Validate(options => options.MessageTimeoutMs > 0, "Kafka message timeout must be positive.")
+            .ValidateOnStart();
+
+        services.AddSingleton<IMessagePublisher, KafkaMessagePublisher>();
+
+        services.AddOptions<OutboxOptions>()
+            .BindConfiguration(OutboxOptions.SectionName)
+            .Validate(options => options.PollingInterval > TimeSpan.Zero, "Outbox polling interval must be positive.")
+            .Validate(options => options.BatchSize > 0, "Outbox batch size must be positive.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.Topic), "Outbox topic is not configured.")
+            .ValidateOnStart();
+
+        services.AddHostedService<OutboxProcessor>();
 
         services.AddHealthChecks()
             .AddDbContextCheck<OrderFlowDbContext>("database", tags: [HealthCheckTags.Ready]);
