@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using OrderFlow.Application.Abstractions;
 using OrderFlow.Application.Idempotency;
 using OrderFlow.Infrastructure.Idempotency;
+using OrderFlow.Infrastructure.Outbox;
 using OrderFlow.Infrastructure.Persistence;
 
 namespace OrderFlow.Infrastructure;
@@ -18,9 +19,12 @@ public static class DependencyInjection
 
         services.TryAddSingleton(TimeProvider.System);
 
-        services.AddDbContext<OrderFlowDbContext>(options => options
+        services.AddSingleton<OutboxInterceptor>();
+
+        services.AddDbContext<OrderFlowDbContext>((provider, options) => options
             .UseNpgsql(connectionString)
-            .UseSnakeCaseNamingConvention());
+            .UseSnakeCaseNamingConvention()
+            .AddInterceptors(provider.GetRequiredService<OutboxInterceptor>()));
 
         services.AddScoped<IOrderFlowDbContext>(provider => provider.GetRequiredService<OrderFlowDbContext>());
 
