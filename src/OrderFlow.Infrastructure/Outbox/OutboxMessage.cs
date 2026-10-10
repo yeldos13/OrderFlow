@@ -26,6 +26,8 @@ public sealed class OutboxMessage
 
     public string? LastError { get; private set; }
 
+    public DateTimeOffset? FailedAt { get; private set; }
+
     public static OutboxMessage Create(
         Guid id,
         Guid aggregateId,
@@ -51,6 +53,15 @@ public sealed class OutboxMessage
     public void MarkFailed(string error)
     {
         Attempts++;
-        LastError = error.Length > MaxErrorLength ? error[..MaxErrorLength] : error;
+        LastError = Truncate(error);
     }
+
+    public void MarkFailedPermanently(string error, DateTimeOffset now)
+    {
+        MarkFailed(error);
+        FailedAt = now;
+    }
+
+    private static string Truncate(string error) =>
+        error.Length > MaxErrorLength ? error[..MaxErrorLength] : error;
 }

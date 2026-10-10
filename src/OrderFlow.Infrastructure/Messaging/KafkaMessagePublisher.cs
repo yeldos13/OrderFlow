@@ -40,15 +40,22 @@ internal sealed partial class KafkaMessagePublisher : IMessagePublisher, IDispos
             }
         }
 
-        await _producer.ProduceAsync(
-            message.Topic,
-            new Message<string, string>
-            {
-                Key = message.Key,
-                Value = message.Value,
-                Headers = headers
-            },
-            cancellationToken);
+        try
+        {
+            await _producer.ProduceAsync(
+                message.Topic,
+                new Message<string, string>
+                {
+                    Key = message.Key,
+                    Value = message.Value,
+                    Headers = headers
+                },
+                cancellationToken);
+        }
+        catch (ProduceException<string, string> exception) when (IsPermanent(exception.Error.Code))
+        {
+            throw new PermanentPublishException(exception.Error.Reason, exception);
+        }
     }
 
     public void Dispose()
@@ -56,6 +63,14 @@ internal sealed partial class KafkaMessagePublisher : IMessagePublisher, IDispos
         _producer.Flush(FlushTimeout);
         _producer.Dispose();
     }
+
+    private static bool IsPermanent(ErrorCode code) => code is
+        ErrorCode.MsgSizeTooLarge or
+        ErrorCode.InvalidMsg or
+        ErrorCode.InvalidMsgSize or
+        ErrorCode.InvalidRecord or
+        ErrorCode.Local_KeySerialization or
+        ErrorCode.Local_ValueSerialization;
 
     private static LogLevel ToLogLevel(SyslogLevel level) => level switch
     {

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OrderFlow.Application.Abstractions;
 using OrderFlow.Application.Idempotency;
 using OrderFlow.Infrastructure.Idempotency;
@@ -51,12 +52,20 @@ public static class DependencyInjection
             .Validate(options => options.PollingInterval > TimeSpan.Zero, "Outbox polling interval must be positive.")
             .Validate(options => options.BatchSize > 0, "Outbox batch size must be positive.")
             .Validate(options => !string.IsNullOrWhiteSpace(options.Topic), "Outbox topic is not configured.")
+            .Validate(options => options.ProcessedRetention > TimeSpan.Zero, "Outbox retention must be positive.")
+            .Validate(options => options.CleanupInterval > TimeSpan.Zero, "Outbox cleanup interval must be positive.")
+            .Validate(options => options.MaxLag > TimeSpan.Zero, "Outbox max lag must be positive.")
             .ValidateOnStart();
 
         services.AddHostedService<OutboxProcessor>();
+        services.AddHostedService<OutboxCleanupService>();
+
+        services.AddSingleton<KafkaHealthCheck>();
 
         services.AddHealthChecks()
-            .AddDbContextCheck<OrderFlowDbContext>("database", tags: [HealthCheckTags.Ready]);
+            .AddDbContextCheck<OrderFlowDbContext>("database", tags: [HealthCheckTags.Ready])
+            .AddCheck<KafkaHealthCheck>("kafka", HealthStatus.Degraded, [HealthCheckTags.Messaging])
+            .AddCheck<OutboxHealthCheck>("outbox", HealthStatus.Degraded, [HealthCheckTags.Messaging]);
 
         return services;
     }

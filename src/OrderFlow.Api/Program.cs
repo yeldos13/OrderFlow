@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using OrderFlow.Api.ErrorHandling;
+using OrderFlow.Api.Health;
 using OrderFlow.Api.Idempotency;
 using OrderFlow.Application;
 using OrderFlow.Infrastructure;
@@ -65,6 +66,10 @@ try
     app.MapHealthChecks("/health/ready", new HealthCheckOptions
     {
         Predicate = check => check.Tags.Contains(HealthCheckTags.Ready)
+    });
+    app.MapHealthChecks("/health", new HealthCheckOptions
+    {
+        ResponseWriter = HealthReportWriter.WriteAsync
     });
 
     await app.RunAsync();

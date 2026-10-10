@@ -24,12 +24,12 @@ internal sealed partial class OutboxProcessor(
         {
             try
             {
-                int published;
+                int handled;
                 do
                 {
-                    published = await PublishBatchAsync(stoppingToken);
+                    handled = await ProcessBatchAsync(stoppingToken);
                 }
-                while (published == options.Value.BatchSize);
+                while (handled == options.Value.BatchSize);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -39,7 +39,7 @@ internal sealed partial class OutboxProcessor(
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
-    private async Task<int> PublishBatchAsync(CancellationToken cancellationToken)
+    private async Task<int> ProcessBatchAsync(CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<OrderFlowDbContext>();
@@ -50,7 +50,7 @@ internal sealed partial class OutboxProcessor(
         var messages = await dbContext.OutboxMessages
             .FromSql($"""
                 SELECT * FROM outbox_messages
-                WHERE processed_at IS NULL
+                WHERE processed_at IS NULL AND failed_at IS NULL
                 ORDER BY occurred_at, id
                 LIMIT {batchSize}
                 FOR UPDATE SKIP LOCKED
@@ -63,6 +63,7 @@ internal sealed partial class OutboxProcessor(
         }
 
         var published = 0;
+        var rejected = 0;
 
         foreach (var message in messages)
         {
@@ -71,6 +72,12 @@ internal sealed partial class OutboxProcessor(
                 await publisher.PublishAsync(ToOutgoingMessage(message), cancellationToken);
                 message.MarkProcessed(timeProvider.GetUtcNow());
                 published++;
+            }
+            catch (PermanentPublishException exception)
+            {
+                message.MarkFailedPermanently(exception.Message, timeProvider.GetUtcNow());
+                LogPublishRejected(exception, message.Id, message.Type);
+                rejected++;
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -88,7 +95,7 @@ internal sealed partial class OutboxProcessor(
             LogBatchPublished(published);
         }
 
-        return published;
+        return published + rejected;
     }
 
     private OutgoingMessage ToOutgoingMessage(OutboxMessage message) => new(
@@ -107,6 +114,9 @@ internal sealed partial class OutboxProcessor(
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to publish outbox message {MessageId} of type {MessageType}, attempt {Attempt}")]
     private partial void LogPublishFailed(Exception exception, Guid messageId, string messageType, int attempt);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Outbox message {MessageId} of type {MessageType} was rejected by the broker and will not be retried")]
+    private partial void LogPublishRejected(Exception exception, Guid messageId, string messageType);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Outbox processing failed")]
     private partial void LogProcessingFailed(Exception exception);

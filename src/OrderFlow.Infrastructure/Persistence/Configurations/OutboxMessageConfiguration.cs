@@ -28,6 +28,9 @@ internal sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outb
             .HasMaxLength(OutboxMessage.MaxErrorLength);
 
         builder.HasIndex(message => new { message.OccurredAt, message.Id })
-            .HasFilter("processed_at IS NULL");
+            .HasFilter("processed_at IS NULL AND failed_at IS NULL");
+
+        builder.HasIndex(message => message.ProcessedAt)
+            .HasFilter("processed_at IS NOT NULL");
     }
 }
