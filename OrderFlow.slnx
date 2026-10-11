@@ -15,4 +15,5 @@
   <Project Path="src/OrderFlow.Contracts/OrderFlow.Contracts.csproj" />
   <Project Path="src/OrderFlow.Domain/OrderFlow.Domain.csproj" />
   <Project Path="src/OrderFlow.Infrastructure/OrderFlow.Infrastructure.csproj" />
+  <Project Path="src/OrderFlow.WarehouseStub/OrderFlow.WarehouseStub.csproj" />
 </Solution>

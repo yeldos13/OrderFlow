@@ -1,0 +1,36 @@
+@baseUrl = http://localhost:5210
+
+POST {{baseUrl}}/api/order-events
+Content-Type: application/json
+
+{
+  "eventId": "{{$guid}}",
+  "eventType": "order.created.v1",
+  "orderId": "{{$guid}}",
+  "occurredAt": "2026-01-01T00:00:00Z",
+  "data": { "totalAmount": 24.00 }
+}
+
+###
+
+GET {{baseUrl}}/api/order-events
+
+###
+
+DELETE {{baseUrl}}/api/order-events
+
+###
+
+GET {{baseUrl}}/api/chaos
+
+###
+
+PUT {{baseUrl}}/api/chaos
+Content-Type: application/json
+
+{
+  "outage": false,
+  "failureRate": 0.2,
+  "slowRate": 0.1,
+  "slowDelayMs": 3000
+}
