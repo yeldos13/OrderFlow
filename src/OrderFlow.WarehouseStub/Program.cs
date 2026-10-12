@@ -41,7 +41,7 @@ events.MapPost("/", (OrderEventRequest request, ReceivedEventStore store, ILogge
         var received = store.Record(request);
 
         logger.LogInformation(
-            "Received {EventType} {EventId} for order {OrderId}, delivery #{Delivery}",
+            "Received {EventType} {OrderEventId} for order {OrderId}, delivery #{Delivery}",
             received.EventType,
             received.EventId,
             received.OrderId,
