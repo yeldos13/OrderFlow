@@ -1,11 +1,15 @@
 using System.Text.Json;
+using OrderFlow.Consumer.Deduplication;
 using OrderFlow.Consumer.Warehouse;
 using OrderFlow.Contracts;
 using OrderFlow.Contracts.Orders;
 
 namespace OrderFlow.Consumer.Processing;
 
-public sealed partial class OrderEventHandler(WarehouseClient warehouseClient, ILogger<OrderEventHandler> logger)
+public sealed partial class OrderEventHandler(
+    WarehouseClient warehouseClient,
+    ProcessedEventStore processedEvents,
+    ILogger<OrderEventHandler> logger)
 {
     public async Task HandleAsync(ReceivedMessage message, CancellationToken cancellationToken)
     {
@@ -28,13 +32,24 @@ public sealed partial class OrderEventHandler(WarehouseClient warehouseClient, I
             throw new UnsupportedMessageException("Message body is not a valid event.", exception);
         }
 
+        if (await processedEvents.IsProcessedAsync(orderEvent.EventId, cancellationToken))
+        {
+            LogDuplicateSkipped(message.EventType, orderEvent.EventId, orderEvent.OrderId);
+            return;
+        }
+
         await warehouseClient.SendAsync(
             new WarehouseOrderEvent(orderEvent.EventId, message.EventType, orderEvent.OrderId, orderEvent.OccurredAt, data),
             cancellationToken);
+
+        await processedEvents.MarkProcessedAsync(orderEvent.EventId, message.EventType, orderEvent.OrderId, cancellationToken);
 
         LogEventDelivered(message.EventType, orderEvent.EventId, orderEvent.OrderId);
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Delivered {EventType} {OrderEventId} for order {OrderId} to warehouse")]
     private partial void LogEventDelivered(string eventType, Guid orderEventId, Guid orderId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Skipped already processed {EventType} {OrderEventId} for order {OrderId}")]
+    private partial void LogDuplicateSkipped(string eventType, Guid orderEventId, Guid orderId);
 }

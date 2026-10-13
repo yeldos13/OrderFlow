@@ -1,5 +1,8 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using OrderFlow.Consumer.Deduplication;
 using OrderFlow.Consumer.Kafka;
+using OrderFlow.Consumer.Persistence;
 using OrderFlow.Consumer.Processing;
 using OrderFlow.Consumer.Warehouse;
 using Serilog;
@@ -37,11 +40,33 @@ try
         client.Timeout = warehouse.Timeout;
     });
 
+    var connectionString = builder.Configuration.GetConnectionString("ConsumerDb")
+        ?? throw new InvalidOperationException("Connection string 'ConsumerDb' is not configured.");
+
+    builder.Services.AddDbContext<ConsumerDbContext>(options => options
+        .UseNpgsql(connectionString)
+        .UseSnakeCaseNamingConvention());
+
+    builder.Services.AddOptions<DeduplicationOptions>()
+        .BindConfiguration(DeduplicationOptions.SectionName)
+        .Validate(options => options.Retention > TimeSpan.Zero, "Deduplication retention must be positive.")
+        .Validate(options => options.CleanupInterval > TimeSpan.Zero, "Deduplication cleanup interval must be positive.")
+        .ValidateOnStart();
+
+    builder.Services.AddSingleton(TimeProvider.System);
+    builder.Services.AddScoped<ProcessedEventStore>();
     builder.Services.AddScoped<OrderEventHandler>();
     builder.Services.AddHostedService<OrderEventsConsumer>();
+    builder.Services.AddHostedService<ProcessedEventsCleanupService>();
     builder.Services.AddHealthChecks();
 
     var app = builder.Build();
+
+    if (app.Environment.IsDevelopment())
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<ConsumerDbContext>().Database.MigrateAsync();
+    }
 
     app.MapHealthChecks("/health/live");
 
