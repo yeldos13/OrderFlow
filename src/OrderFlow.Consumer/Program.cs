@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using OrderFlow.Consumer.Deduplication;
 using OrderFlow.Consumer.Kafka;
 using OrderFlow.Consumer.Persistence;
@@ -27,18 +26,7 @@ try
         .Validate(options => options.RetryDelay > TimeSpan.Zero, "Retry delay must be positive.")
         .ValidateOnStart();
 
-    builder.Services.AddOptions<WarehouseOptions>()
-        .BindConfiguration(WarehouseOptions.SectionName)
-        .Validate(options => options.BaseUrl is { IsAbsoluteUri: true }, "Warehouse base URL is not configured.")
-        .Validate(options => options.Timeout > TimeSpan.Zero, "Warehouse timeout must be positive.")
-        .ValidateOnStart();
-
-    builder.Services.AddHttpClient<WarehouseClient>((services, client) =>
-    {
-        var warehouse = services.GetRequiredService<IOptions<WarehouseOptions>>().Value;
-        client.BaseAddress = warehouse.BaseUrl;
-        client.Timeout = warehouse.Timeout;
-    });
+    builder.Services.AddWarehouseClient();
 
     var connectionString = builder.Configuration.GetConnectionString("ConsumerDb")
         ?? throw new InvalidOperationException("Connection string 'ConsumerDb' is not configured.");

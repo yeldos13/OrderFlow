@@ -4,6 +4,7 @@ using Confluent.Kafka;
 using Microsoft.Extensions.Options;
 using OrderFlow.Consumer.Processing;
 using OrderFlow.Contracts;
+using Polly.CircuitBreaker;
 
 namespace OrderFlow.Consumer.Kafka;
 
@@ -64,6 +65,13 @@ internal sealed partial class OrderEventsConsumer(
         {
             LogMessageSkipped(exception, result.TopicPartitionOffset.ToString());
             consumer.StoreOffset(result);
+        }
+        catch (BrokenCircuitException exception)
+        {
+            var pause = exception.RetryAfter ?? options.Value.RetryDelay;
+            LogCircuitOpen(result.TopicPartitionOffset.ToString(), pause.TotalSeconds);
+            consumer.Seek(result.TopicPartitionOffset);
+            await Task.Delay(pause, stoppingToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
         {
@@ -132,6 +140,9 @@ internal sealed partial class OrderEventsConsumer(
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Skipping unsupported message at {Position}")]
     private partial void LogMessageSkipped(Exception exception, string position);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Warehouse circuit is open, pausing consumption at {Position} for {PauseSeconds:F1} s")]
+    private partial void LogCircuitOpen(string position, double pauseSeconds);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to process message at {Position}, it will be retried")]
     private partial void LogProcessingFailed(Exception exception, string position);
