@@ -3,6 +3,7 @@ using System.Text;
 using Confluent.Kafka;
 using Microsoft.Extensions.Options;
 using OrderFlow.Consumer.Processing;
+using OrderFlow.Consumer.Warehouse;
 using OrderFlow.Contracts;
 using Polly.CircuitBreaker;
 
@@ -10,6 +11,7 @@ namespace OrderFlow.Consumer.Kafka;
 
 internal sealed partial class OrderEventsConsumer(
     IServiceScopeFactory scopeFactory,
+    DeadLetterPublisher deadLetterPublisher,
     IOptions<KafkaConsumerOptions> options,
     ILogger<OrderEventsConsumer> logger) : BackgroundService
 {
@@ -61,10 +63,9 @@ internal sealed partial class OrderEventsConsumer(
 
             consumer.StoreOffset(result);
         }
-        catch (UnsupportedMessageException exception)
+        catch (Exception exception) when (exception is UnsupportedMessageException or WarehouseRejectedException)
         {
-            LogMessageSkipped(exception, result.TopicPartitionOffset.ToString());
-            consumer.StoreOffset(result);
+            await MoveToDeadLetterAsync(consumer, result, exception, stoppingToken);
         }
         catch (BrokenCircuitException exception)
         {
@@ -76,6 +77,26 @@ internal sealed partial class OrderEventsConsumer(
         catch (Exception exception) when (exception is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
         {
             LogProcessingFailed(exception, result.TopicPartitionOffset.ToString());
+            consumer.Seek(result.TopicPartitionOffset);
+            await Task.Delay(options.Value.RetryDelay, stoppingToken);
+        }
+    }
+
+    private async Task MoveToDeadLetterAsync(
+        IConsumer<string, string> consumer,
+        ConsumeResult<string, string> result,
+        Exception exception,
+        CancellationToken stoppingToken)
+    {
+        try
+        {
+            await deadLetterPublisher.PublishAsync(result, exception, stoppingToken);
+            consumer.StoreOffset(result);
+            LogMovedToDeadLetter(exception, result.TopicPartitionOffset.ToString(), options.Value.DeadLetterTopic);
+        }
+        catch (Exception publishException) when (publishException is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+        {
+            LogDeadLetterFailed(publishException, result.TopicPartitionOffset.ToString());
             consumer.Seek(result.TopicPartitionOffset);
             await Task.Delay(options.Value.RetryDelay, stoppingToken);
         }
@@ -95,7 +116,7 @@ internal sealed partial class OrderEventsConsumer(
         };
 
         return new ConsumerBuilder<string, string>(config)
-            .SetLogHandler((_, logMessage) => LogKafkaClientMessage(ToLogLevel(logMessage.Level), logMessage.Facility, logMessage.Message))
+            .SetLogHandler((_, logMessage) => LogKafkaClientMessage(logMessage.Level.ToLogLevel(), logMessage.Facility, logMessage.Message))
             .SetPartitionsAssignedHandler((_, partitions) => LogPartitionsAssigned(string.Join(", ", partitions.Select(partition => partition.Partition.Value))))
             .SetPartitionsRevokedHandler((_, partitions) => LogPartitionsRevoked(string.Join(", ", partitions.Select(partition => partition.Partition.Value))))
             .Build();
@@ -123,23 +144,17 @@ internal sealed partial class OrderEventsConsumer(
         return activity.Start();
     }
 
-    private static LogLevel ToLogLevel(SyslogLevel level) => level switch
-    {
-        SyslogLevel.Emergency or SyslogLevel.Alert or SyslogLevel.Critical => LogLevel.Critical,
-        SyslogLevel.Error => LogLevel.Error,
-        SyslogLevel.Warning => LogLevel.Warning,
-        SyslogLevel.Notice or SyslogLevel.Info => LogLevel.Information,
-        _ => LogLevel.Debug
-    };
-
     [LoggerMessage(Level = LogLevel.Information, Message = "Partitions assigned: {Partitions}")]
     private partial void LogPartitionsAssigned(string partitions);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Partitions revoked: {Partitions}")]
     private partial void LogPartitionsRevoked(string partitions);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Skipping unsupported message at {Position}")]
-    private partial void LogMessageSkipped(Exception exception, string position);
+    [LoggerMessage(Level = LogLevel.Error, Message = "Message at {Position} cannot be processed and was moved to {DeadLetterTopic}")]
+    private partial void LogMovedToDeadLetter(Exception exception, string position, string deadLetterTopic);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to move message at {Position} to the dead letter topic, it will be retried")]
+    private partial void LogDeadLetterFailed(Exception exception, string position);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Warehouse circuit is open, pausing consumption at {Position} for {PauseSeconds:F1} s")]
     private partial void LogCircuitOpen(string position, double pauseSeconds);

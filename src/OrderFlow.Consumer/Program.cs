@@ -23,6 +23,8 @@ try
         .Validate(options => !string.IsNullOrWhiteSpace(options.BootstrapServers), "Kafka bootstrap servers are not configured.")
         .Validate(options => !string.IsNullOrWhiteSpace(options.GroupId), "Kafka consumer group is not configured.")
         .Validate(options => !string.IsNullOrWhiteSpace(options.Topic), "Kafka topic is not configured.")
+        .Validate(options => !string.IsNullOrWhiteSpace(options.DeadLetterTopic) && options.DeadLetterTopic != options.Topic, "Dead letter topic must be configured and differ from the source topic.")
+        .Validate(options => options.ProducerMessageTimeoutMs > 0, "Producer message timeout must be positive.")
         .Validate(options => options.RetryDelay > TimeSpan.Zero, "Retry delay must be positive.")
         .ValidateOnStart();
 
@@ -44,6 +46,7 @@ try
     builder.Services.AddSingleton(TimeProvider.System);
     builder.Services.AddScoped<ProcessedEventStore>();
     builder.Services.AddScoped<OrderEventHandler>();
+    builder.Services.AddSingleton<DeadLetterPublisher>();
     builder.Services.AddHostedService<OrderEventsConsumer>();
     builder.Services.AddHostedService<ProcessedEventsCleanupService>();
     builder.Services.AddHealthChecks();

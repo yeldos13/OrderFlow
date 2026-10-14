@@ -14,5 +14,9 @@ public sealed class KafkaConsumerOptions
 
     public string Topic { get; init; } = Topics.Orders;
 
+    public string DeadLetterTopic { get; init; } = Topics.OrdersDeadLetter;
+
+    public int ProducerMessageTimeoutMs { get; init; } = 15_000;
+
     public TimeSpan RetryDelay { get; init; } = TimeSpan.FromSeconds(1);
 }
