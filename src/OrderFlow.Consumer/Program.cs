@@ -1,5 +1,8 @@
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OrderFlow.Consumer.Deduplication;
+using OrderFlow.Consumer.Health;
 using OrderFlow.Consumer.Kafka;
 using OrderFlow.Consumer.Persistence;
 using OrderFlow.Consumer.Processing;
@@ -12,6 +15,8 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
+    const string ReadinessTag = "ready";
+
     var builder = WebApplication.CreateBuilder(args);
 
     builder.Services.AddSerilog((services, configuration) => configuration
@@ -49,7 +54,21 @@ try
     builder.Services.AddSingleton<DeadLetterPublisher>();
     builder.Services.AddHostedService<OrderEventsConsumer>();
     builder.Services.AddHostedService<ProcessedEventsCleanupService>();
-    builder.Services.AddHealthChecks();
+
+    builder.Services.AddOptions<ConsumerHealthOptions>()
+        .BindConfiguration(ConsumerHealthOptions.SectionName)
+        .Validate(options => options.StallThreshold > TimeSpan.Zero, "Stall threshold must be positive.")
+        .Validate(options => options.DeadLetterWindow > TimeSpan.Zero, "Dead letter window must be positive.")
+        .ValidateOnStart();
+
+    builder.Services.AddSingleton<ConsumerStatus>();
+    builder.Services.AddSingleton<KafkaHealthCheck>();
+
+    builder.Services.AddHealthChecks()
+        .AddDbContextCheck<ConsumerDbContext>("database", tags: [ReadinessTag])
+        .AddCheck<KafkaHealthCheck>("kafka", HealthStatus.Degraded)
+        .AddCheck<ConsumerHealthCheck>("consumer", HealthStatus.Degraded)
+        .AddCheck<WarehouseCircuitHealthCheck>("warehouse", HealthStatus.Degraded);
 
     var app = builder.Build();
 
@@ -59,7 +78,15 @@ try
         await scope.ServiceProvider.GetRequiredService<ConsumerDbContext>().Database.MigrateAsync();
     }
 
-    app.MapHealthChecks("/health/live");
+    app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
+    app.MapHealthChecks("/health/ready", new HealthCheckOptions
+    {
+        Predicate = check => check.Tags.Contains(ReadinessTag)
+    });
+    app.MapHealthChecks("/health", new HealthCheckOptions
+    {
+        ResponseWriter = HealthReportWriter.WriteAsync
+    });
 
     await app.RunAsync();
 }

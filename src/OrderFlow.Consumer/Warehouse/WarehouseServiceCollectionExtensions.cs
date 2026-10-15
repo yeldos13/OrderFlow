@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
 using Polly;
+using Polly.CircuitBreaker;
 
 namespace OrderFlow.Consumer.Warehouse;
 
@@ -17,6 +18,8 @@ public static class WarehouseServiceCollectionExtensions
             .Validate(options => options.Resilience.CircuitFailureRatio is > 0 and <= 1, "Circuit failure ratio must be in (0, 1].")
             .Validate(options => options.Resilience.CircuitSamplingDuration >= options.Resilience.AttemptTimeout * 2, "Circuit sampling duration must be at least twice the attempt timeout.")
             .ValidateOnStart();
+
+        services.AddSingleton<CircuitBreakerStateProvider>();
 
         services.AddHttpClient<WarehouseClient>((provider, client) =>
             {
@@ -41,7 +44,8 @@ public static class WarehouseServiceCollectionExtensions
                         FailureRatio = options.CircuitFailureRatio,
                         MinimumThroughput = options.CircuitMinimumThroughput,
                         SamplingDuration = options.CircuitSamplingDuration,
-                        BreakDuration = options.CircuitBreakDuration
+                        BreakDuration = options.CircuitBreakDuration,
+                        StateProvider = context.ServiceProvider.GetRequiredService<CircuitBreakerStateProvider>()
                     })
                     .AddTimeout(options.AttemptTimeout);
             });

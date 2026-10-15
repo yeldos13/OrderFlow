@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using Confluent.Kafka;
 using Microsoft.Extensions.Options;
+using OrderFlow.Consumer.Health;
 using OrderFlow.Consumer.Processing;
 using OrderFlow.Consumer.Warehouse;
 using OrderFlow.Contracts;
@@ -12,6 +13,7 @@ namespace OrderFlow.Consumer.Kafka;
 internal sealed partial class OrderEventsConsumer(
     IServiceScopeFactory scopeFactory,
     DeadLetterPublisher deadLetterPublisher,
+    ConsumerStatus status,
     IOptions<KafkaConsumerOptions> options,
     ILogger<OrderEventsConsumer> logger) : BackgroundService
 {
@@ -51,6 +53,7 @@ internal sealed partial class OrderEventsConsumer(
 
     private async Task ProcessAsync(IConsumer<string, string> consumer, ConsumeResult<string, string> result, CancellationToken stoppingToken)
     {
+        status.MessageReceived(result.Partition.Value, GetLag(consumer, result) + 1);
         var message = ToReceivedMessage(result);
         using var activity = StartActivity(message);
 
@@ -62,6 +65,7 @@ internal sealed partial class OrderEventsConsumer(
             await handler.HandleAsync(message, stoppingToken);
 
             consumer.StoreOffset(result);
+            status.MessageCompleted(result.Partition.Value, GetLag(consumer, result));
         }
         catch (Exception exception) when (exception is UnsupportedMessageException or WarehouseRejectedException)
         {
@@ -92,6 +96,7 @@ internal sealed partial class OrderEventsConsumer(
         {
             await deadLetterPublisher.PublishAsync(result, exception, stoppingToken);
             consumer.StoreOffset(result);
+            status.MessageDeadLettered(result.Partition.Value, GetLag(consumer, result));
             LogMovedToDeadLetter(exception, result.TopicPartitionOffset.ToString(), options.Value.DeadLetterTopic);
         }
         catch (Exception publishException) when (publishException is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
@@ -117,9 +122,25 @@ internal sealed partial class OrderEventsConsumer(
 
         return new ConsumerBuilder<string, string>(config)
             .SetLogHandler((_, logMessage) => LogKafkaClientMessage(logMessage.Level.ToLogLevel(), logMessage.Facility, logMessage.Message))
-            .SetPartitionsAssignedHandler((_, partitions) => LogPartitionsAssigned(string.Join(", ", partitions.Select(partition => partition.Partition.Value))))
-            .SetPartitionsRevokedHandler((_, partitions) => LogPartitionsRevoked(string.Join(", ", partitions.Select(partition => partition.Partition.Value))))
+            .SetPartitionsAssignedHandler((_, partitions) =>
+            {
+                var assigned = partitions.Select(partition => partition.Partition.Value).ToList();
+                status.PartitionsAssigned(assigned);
+                LogPartitionsAssigned(string.Join(", ", assigned));
+            })
+            .SetPartitionsRevokedHandler((_, partitions) =>
+            {
+                var revoked = partitions.Select(partition => partition.Partition.Value).ToList();
+                status.PartitionsRevoked(revoked);
+                LogPartitionsRevoked(string.Join(", ", revoked));
+            })
             .Build();
+    }
+
+    private static long GetLag(IConsumer<string, string> consumer, ConsumeResult<string, string> result)
+    {
+        var high = consumer.GetWatermarkOffsets(result.TopicPartition).High;
+        return high == Offset.Unset ? 0 : Math.Max(0, high.Value - result.Offset.Value - 1);
     }
 
     private static ReceivedMessage ToReceivedMessage(ConsumeResult<string, string> result) => new(
