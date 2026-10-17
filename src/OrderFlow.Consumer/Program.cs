@@ -49,7 +49,7 @@ try
         .ValidateOnStart();
 
     builder.Services.AddSingleton(TimeProvider.System);
-    builder.Services.AddScoped<ProcessedEventStore>();
+    builder.Services.AddScoped<IProcessedEventStore, ProcessedEventStore>();
     builder.Services.AddScoped<OrderEventHandler>();
     builder.Services.AddSingleton<DeadLetterPublisher>();
     builder.Services.AddHostedService<OrderEventsConsumer>();

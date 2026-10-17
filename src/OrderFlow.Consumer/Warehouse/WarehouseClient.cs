@@ -2,7 +2,7 @@ using System.Net;
 
 namespace OrderFlow.Consumer.Warehouse;
 
-public sealed class WarehouseClient(HttpClient httpClient)
+public sealed class WarehouseClient(HttpClient httpClient) : IWarehouseClient
 {
     private const int MaxDetailsLength = 500;
 

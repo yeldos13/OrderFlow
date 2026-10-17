@@ -7,8 +7,8 @@ using OrderFlow.Contracts.Orders;
 namespace OrderFlow.Consumer.Processing;
 
 public sealed partial class OrderEventHandler(
-    WarehouseClient warehouseClient,
-    ProcessedEventStore processedEvents,
+    IWarehouseClient warehouseClient,
+    IProcessedEventStore processedEvents,
     ILogger<OrderEventHandler> logger)
 {
     public async Task HandleAsync(ReceivedMessage message, CancellationToken cancellationToken)

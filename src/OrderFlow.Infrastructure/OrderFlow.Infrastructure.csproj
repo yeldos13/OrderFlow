@@ -13,4 +13,8 @@
     <ProjectReference Include="..\OrderFlow.Contracts\OrderFlow.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="OrderFlow.Infrastructure.Tests" />
+  </ItemGroup>
+
 </Project>

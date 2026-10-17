@@ -22,4 +22,8 @@
     <ProjectReference Include="..\OrderFlow.Contracts\OrderFlow.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="OrderFlow.Consumer.Tests" />
+  </ItemGroup>
+
 </Project>

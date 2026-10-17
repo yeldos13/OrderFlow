@@ -21,7 +21,7 @@ public static class WarehouseServiceCollectionExtensions
 
         services.AddSingleton<CircuitBreakerStateProvider>();
 
-        services.AddHttpClient<WarehouseClient>((provider, client) =>
+        services.AddHttpClient<IWarehouseClient, WarehouseClient>((provider, client) =>
             {
                 client.BaseAddress = provider.GetRequiredService<IOptions<WarehouseOptions>>().Value.BaseUrl;
                 client.Timeout = Timeout.InfiniteTimeSpan;

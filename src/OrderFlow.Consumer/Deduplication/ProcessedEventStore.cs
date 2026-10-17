@@ -4,7 +4,7 @@ using OrderFlow.Consumer.Persistence;
 
 namespace OrderFlow.Consumer.Deduplication;
 
-public sealed class ProcessedEventStore(ConsumerDbContext dbContext, TimeProvider timeProvider)
+public sealed class ProcessedEventStore(ConsumerDbContext dbContext, TimeProvider timeProvider) : IProcessedEventStore
 {
     public Task<bool> IsProcessedAsync(Guid eventId, CancellationToken cancellationToken) =>
         dbContext.ProcessedEvents.AnyAsync(processedEvent => processedEvent.EventId == eventId, cancellationToken);

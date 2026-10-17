@@ -10,4 +10,8 @@
     <ProjectReference Include="..\OrderFlow.Domain\OrderFlow.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="OrderFlow.Application.Tests" />
+  </ItemGroup>
+
 </Project>
