@@ -19,4 +19,8 @@
     <ProjectReference Include="..\OrderFlow.Infrastructure\OrderFlow.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="OrderFlow.Api.IntegrationTests" />
+  </ItemGroup>
+
 </Project>

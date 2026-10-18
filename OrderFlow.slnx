@@ -18,6 +18,7 @@
   <Project Path="src/OrderFlow.Domain/OrderFlow.Domain.csproj" />
   <Project Path="src/OrderFlow.Infrastructure/OrderFlow.Infrastructure.csproj" />
   <Project Path="src/OrderFlow.WarehouseStub/OrderFlow.WarehouseStub.csproj" />
+  <Project Path="tests/OrderFlow.Api.IntegrationTests/OrderFlow.Api.IntegrationTests.csproj" />
   <Project Path="tests/OrderFlow.Application.Tests/OrderFlow.Application.Tests.csproj" />
   <Project Path="tests/OrderFlow.Consumer.Tests/OrderFlow.Consumer.Tests.csproj" />
   <Project Path="tests/OrderFlow.Domain.Tests/OrderFlow.Domain.Tests.csproj" />
