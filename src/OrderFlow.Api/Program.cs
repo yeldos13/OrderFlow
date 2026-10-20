@@ -45,7 +45,10 @@ try
     if (app.Environment.IsDevelopment())
     {
         await app.Services.ApplyMigrationsAsync();
+    }
 
+    if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("OpenApi:Enabled"))
+    {
         app.MapOpenApi();
         app.MapScalarApiReference();
     }

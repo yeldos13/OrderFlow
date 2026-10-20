@@ -75,6 +75,91 @@ services:
       - "127.0.0.1:${KAFKA_UI_PORT:-8080}:8080"
     restart: unless-stopped
 
+  api-migrations:
+    build:
+      context: .
+      dockerfile: src/OrderFlow.Api/Dockerfile
+      target: migrations
+    image: orderflow/api-migrations
+    container_name: orderflow-api-migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__OrderFlow: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: src/OrderFlow.Api/Dockerfile
+      target: final
+    image: orderflow/api
+    container_name: orderflow-api
+    depends_on:
+      api-migrations:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__OrderFlow: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable
+      Kafka__BootstrapServers: kafka:29092
+      OpenApi__Enabled: "true"
+    ports:
+      - "127.0.0.1:${API_PORT:-5100}:8080"
+    restart: unless-stopped
+
+  warehouse:
+    build:
+      context: .
+      dockerfile: src/OrderFlow.WarehouseStub/Dockerfile
+      target: final
+    image: orderflow/warehouse-stub
+    container_name: orderflow-warehouse
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+    ports:
+      - "127.0.0.1:${WAREHOUSE_PORT:-5110}:8080"
+    restart: unless-stopped
+
+  consumer-migrations:
+    build:
+      context: .
+      dockerfile: src/OrderFlow.Consumer/Dockerfile
+      target: migrations
+    image: orderflow/consumer-migrations
+    container_name: orderflow-consumer-migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__ConsumerDb: Host=postgres;Port=5432;Database=${POSTGRES_DB}_consumer;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable
+    restart: "no"
+
+  consumer:
+    build:
+      context: .
+      dockerfile: src/OrderFlow.Consumer/Dockerfile
+      target: final
+    image: orderflow/consumer
+    container_name: orderflow-consumer
+    depends_on:
+      consumer-migrations:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+      warehouse:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__ConsumerDb: Host=postgres;Port=5432;Database=${POSTGRES_DB}_consumer;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable
+      Kafka__BootstrapServers: kafka:29092
+      Warehouse__BaseUrl: http://warehouse:8080/
+    ports:
+      - "127.0.0.1:${CONSUMER_PORT:-5120}:8080"
+    restart: unless-stopped
+
 volumes:
   postgres-data:
   kafka-data:
