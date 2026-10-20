@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            Directory.Packages.props
+            **/*.csproj
+
+      - name: Restore
+        run: dotnet restore OrderFlow.slnx
+
+      - name: Build
+        run: dotnet build OrderFlow.slnx --configuration Release --no-restore
+
+      - name: Test
+        shell: bash
+        run: |
+          status=0
+          for project in tests/*/*.csproj; do
+            name=$(basename "$project" .csproj)
+            dotnet test --project "$project" --configuration Release --no-build \
+              --results-directory "TestResults/$name" \
+              --report-xunit-trx --report-xunit-markdown || status=1
+          done
+          exit $status
+
+      - name: Test summary
+        if: always()
+        shell: bash
+        run: |
+          for directory in TestResults/*/; do
+            name=$(basename "$directory")
+            echo "### $name" >> "$GITHUB_STEP_SUMMARY"
+            if compgen -G "${directory}*.md" > /dev/null; then
+              sed '/^### Test Results$/d' "${directory}"*.md >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "No results" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: TestResults
+          if-no-files-found: ignore
