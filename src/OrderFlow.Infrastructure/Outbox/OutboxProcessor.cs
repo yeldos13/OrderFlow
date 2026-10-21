@@ -73,6 +73,24 @@ internal sealed partial class OutboxProcessor(
             return 0;
         }
 
+        var results = await Task.WhenAll(messages
+            .GroupBy(message => message.AggregateId)
+            .Select(group => PublishInOrderAsync([.. group], cancellationToken)));
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        var published = results.Sum(result => result.Published);
+        if (published > 0)
+        {
+            LogBatchPublished(published);
+        }
+
+        return published + results.Sum(result => result.Rejected);
+    }
+
+    private async Task<(int Published, int Rejected)> PublishInOrderAsync(List<OutboxMessage> messages, CancellationToken cancellationToken)
+    {
         var published = 0;
         var rejected = 0;
 
@@ -98,15 +116,7 @@ internal sealed partial class OutboxProcessor(
             }
         }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-
-        if (published > 0)
-        {
-            LogBatchPublished(published);
-        }
-
-        return published + rejected;
+        return (published, rejected);
     }
 
     private OutgoingMessage ToOutgoingMessage(OutboxMessage message) => new(

@@ -36,8 +36,9 @@ public sealed class OutboxProcessorTests(ApiFactory factory) : IAsyncLifetime
     [Fact]
     public async Task PublishesPendingMessagesInOrder()
     {
-        var first = await AddMessageAsync(minutesAgo: 2);
-        var second = await AddMessageAsync(minutesAgo: 1);
+        var orderId = Guid.NewGuid();
+        var first = await AddMessageAsync(minutesAgo: 2, orderId);
+        var second = await AddMessageAsync(minutesAgo: 1, orderId);
 
         var handled = await CreateProcessor().ProcessBatchAsync(_cancellationToken);
 
@@ -47,10 +48,11 @@ public sealed class OutboxProcessorTests(ApiFactory factory) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task TransientFailure_StopsBatchAndKeepsOrder()
+    public async Task TransientFailure_HoldsLaterMessagesOfSameOrder()
     {
-        var first = await AddMessageAsync(minutesAgo: 2);
-        var second = await AddMessageAsync(minutesAgo: 1);
+        var orderId = Guid.NewGuid();
+        var first = await AddMessageAsync(minutesAgo: 2, orderId);
+        var second = await AddMessageAsync(minutesAgo: 1, orderId);
         _publisher.FailWith(first.Id, new TimeoutException("broker timeout"));
 
         var handled = await CreateProcessor().ProcessBatchAsync(_cancellationToken);
@@ -66,10 +68,29 @@ public sealed class OutboxProcessorTests(ApiFactory factory) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task TransientFailure_DoesNotBlockOtherOrders()
+    {
+        var failing = await AddMessageAsync(minutesAgo: 2);
+        var other = await AddMessageAsync(minutesAgo: 1);
+        _publisher.FailWith(failing.Id, new TimeoutException("broker timeout"));
+
+        var handled = await CreateProcessor().ProcessBatchAsync(_cancellationToken);
+
+        Assert.Equal(1, handled);
+        Assert.Equal(other.Id.ToString(), Assert.Single(_publisher.Published).Headers[MessageHeaders.EventId]);
+
+        var stored = await LoadAsync(failing.Id, other.Id);
+        Assert.Null(stored[0].ProcessedAt);
+        Assert.Equal(1, stored[0].Attempts);
+        Assert.NotNull(stored[1].ProcessedAt);
+    }
+
+    [Fact]
     public async Task PermanentFailure_SkipsMessageAndContinues()
     {
-        var first = await AddMessageAsync(minutesAgo: 2);
-        var second = await AddMessageAsync(minutesAgo: 1);
+        var orderId = Guid.NewGuid();
+        var first = await AddMessageAsync(minutesAgo: 2, orderId);
+        var second = await AddMessageAsync(minutesAgo: 1, orderId);
         _publisher.FailWith(first.Id, new PermanentPublishException("too large", new Exception()));
 
         var handled = await CreateProcessor().ProcessBatchAsync(_cancellationToken);
@@ -112,11 +133,11 @@ public sealed class OutboxProcessorTests(ApiFactory factory) : IAsyncLifetime
             .UseSnakeCaseNamingConvention()
             .Options);
 
-    private async Task<OutboxMessage> AddMessageAsync(int minutesAgo)
+    private async Task<OutboxMessage> AddMessageAsync(int minutesAgo, Guid? orderId = null)
     {
         var message = OutboxMessage.Create(
             Guid.CreateVersion7(),
-            Guid.NewGuid(),
+            orderId ?? Guid.NewGuid(),
             "order.confirmed.v1",
             "{}",
             null,
@@ -141,6 +162,8 @@ public sealed class OutboxProcessorTests(ApiFactory factory) : IAsyncLifetime
     {
         private readonly Dictionary<string, Exception> _failures = [];
 
+        private readonly Lock _lock = new();
+
         public List<OutgoingMessage> Published { get; } = [];
 
         public void FailWith(Guid messageId, Exception exception) => _failures[messageId.ToString()] = exception;
@@ -152,7 +175,11 @@ public sealed class OutboxProcessorTests(ApiFactory factory) : IAsyncLifetime
                 throw exception;
             }
 
-            Published.Add(message);
+            lock (_lock)
+            {
+                Published.Add(message);
+            }
+
             return Task.CompletedTask;
         }
     }
