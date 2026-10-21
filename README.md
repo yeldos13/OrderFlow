@@ -64,7 +64,7 @@ Create and ship an order:
 ```bash
 ORDER=$(curl -s -X POST http://localhost:5100/api/orders \
   -H "Content-Type: application/json" \
-  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Idempotency-Key: $RANDOM-$RANDOM-$RANDOM" \
   -d '{"customerId":"6f1c2a8e-3b4d-4e5f-9a1b-2c3d4e5f6a7b","items":[{"productId":"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d","quantity":2,"unitPrice":10.50}]}' \
   | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
 
