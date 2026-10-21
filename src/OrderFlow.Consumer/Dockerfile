@@ -3,10 +3,12 @@ WORKDIR /src
 
 COPY Directory.Build.props Directory.Packages.props dotnet-tools.json ./
 COPY src/OrderFlow.Contracts/OrderFlow.Contracts.csproj src/OrderFlow.Contracts/
+COPY src/OrderFlow.ServiceDefaults/OrderFlow.ServiceDefaults.csproj src/OrderFlow.ServiceDefaults/
 COPY src/OrderFlow.Consumer/OrderFlow.Consumer.csproj src/OrderFlow.Consumer/
 RUN dotnet restore src/OrderFlow.Consumer/OrderFlow.Consumer.csproj && dotnet tool restore
 
 COPY src/OrderFlow.Contracts/ src/OrderFlow.Contracts/
+COPY src/OrderFlow.ServiceDefaults/ src/OrderFlow.ServiceDefaults/
 COPY src/OrderFlow.Consumer/ src/OrderFlow.Consumer/
 RUN dotnet publish src/OrderFlow.Consumer/OrderFlow.Consumer.csproj --configuration Release --no-restore --output /app /p:UseAppHost=false
 

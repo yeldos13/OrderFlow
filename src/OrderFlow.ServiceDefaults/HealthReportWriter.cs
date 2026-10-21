@@ -1,9 +1,10 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-namespace OrderFlow.Consumer.Health;
+namespace OrderFlow.ServiceDefaults;
 
-internal static class HealthReportWriter
+public static class HealthReportWriter
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {

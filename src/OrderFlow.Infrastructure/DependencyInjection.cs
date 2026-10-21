@@ -3,12 +3,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 using OrderFlow.Application.Abstractions;
 using OrderFlow.Application.Idempotency;
 using OrderFlow.Infrastructure.Idempotency;
 using OrderFlow.Infrastructure.Messaging;
 using OrderFlow.Infrastructure.Outbox;
 using OrderFlow.Infrastructure.Persistence;
+using OrderFlow.ServiceDefaults;
 
 namespace OrderFlow.Infrastructure;
 
@@ -60,12 +62,16 @@ public static class DependencyInjection
         services.AddHostedService<OutboxProcessor>();
         services.AddHostedService<OutboxCleanupService>();
 
-        services.AddSingleton<KafkaHealthCheck>();
+        services.AddSingleton(provider =>
+        {
+            var kafka = provider.GetRequiredService<IOptions<KafkaOptions>>().Value;
+            return new KafkaHealthCheck(kafka.BootstrapServers, kafka.ClientId);
+        });
 
         services.AddHealthChecks()
-            .AddDbContextCheck<OrderFlowDbContext>("database", tags: [HealthCheckTags.Ready])
-            .AddCheck<KafkaHealthCheck>("kafka", HealthStatus.Degraded, [HealthCheckTags.Messaging])
-            .AddCheck<OutboxHealthCheck>("outbox", HealthStatus.Degraded, [HealthCheckTags.Messaging]);
+            .AddDbContextCheck<OrderFlowDbContext>("database", tags: [HealthEndpoints.ReadyTag])
+            .AddCheck<KafkaHealthCheck>("kafka", HealthStatus.Degraded)
+            .AddCheck<OutboxHealthCheck>("outbox", HealthStatus.Degraded);
 
         return services;
     }

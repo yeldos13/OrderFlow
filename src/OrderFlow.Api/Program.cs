@@ -1,10 +1,9 @@
 using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using OrderFlow.Api.ErrorHandling;
-using OrderFlow.Api.Health;
 using OrderFlow.Api.Idempotency;
 using OrderFlow.Application;
 using OrderFlow.Infrastructure;
+using OrderFlow.ServiceDefaults;
 using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
@@ -65,15 +64,7 @@ try
 
     app.MapControllers();
 
-    app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
-    app.MapHealthChecks("/health/ready", new HealthCheckOptions
-    {
-        Predicate = check => check.Tags.Contains(HealthCheckTags.Ready)
-    });
-    app.MapHealthChecks("/health", new HealthCheckOptions
-    {
-        ResponseWriter = HealthReportWriter.WriteAsync
-    });
+    app.MapHealthEndpoints();
 
     await app.RunAsync();
 }

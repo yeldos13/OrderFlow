@@ -1,12 +1,13 @@
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 using OrderFlow.Consumer.Deduplication;
 using OrderFlow.Consumer.Health;
 using OrderFlow.Consumer.Kafka;
 using OrderFlow.Consumer.Persistence;
 using OrderFlow.Consumer.Processing;
 using OrderFlow.Consumer.Warehouse;
+using OrderFlow.ServiceDefaults;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
@@ -15,8 +16,6 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    const string ReadinessTag = "ready";
-
     var builder = WebApplication.CreateBuilder(args);
 
     builder.Services.AddSerilog((services, configuration) => configuration
@@ -62,10 +61,14 @@ try
         .ValidateOnStart();
 
     builder.Services.AddSingleton<ConsumerStatus>();
-    builder.Services.AddSingleton<KafkaHealthCheck>();
+    builder.Services.AddSingleton(provider =>
+    {
+        var kafka = provider.GetRequiredService<IOptions<KafkaConsumerOptions>>().Value;
+        return new KafkaHealthCheck(kafka.BootstrapServers, kafka.ClientId);
+    });
 
     builder.Services.AddHealthChecks()
-        .AddDbContextCheck<ConsumerDbContext>("database", tags: [ReadinessTag])
+        .AddDbContextCheck<ConsumerDbContext>("database", tags: [HealthEndpoints.ReadyTag])
         .AddCheck<KafkaHealthCheck>("kafka", HealthStatus.Degraded)
         .AddCheck<ConsumerHealthCheck>("consumer", HealthStatus.Degraded)
         .AddCheck<WarehouseCircuitHealthCheck>("warehouse", HealthStatus.Degraded);
@@ -78,15 +81,7 @@ try
         await scope.ServiceProvider.GetRequiredService<ConsumerDbContext>().Database.MigrateAsync();
     }
 
-    app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
-    app.MapHealthChecks("/health/ready", new HealthCheckOptions
-    {
-        Predicate = check => check.Tags.Contains(ReadinessTag)
-    });
-    app.MapHealthChecks("/health", new HealthCheckOptions
-    {
-        ResponseWriter = HealthReportWriter.WriteAsync
-    });
+    app.MapHealthEndpoints();
 
     await app.RunAsync();
 }

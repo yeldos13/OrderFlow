@@ -137,8 +137,9 @@ src/
   OrderFlow.Domain          Order aggregate, status rules, domain events
   OrderFlow.Application     Use cases, DTOs, validation
   OrderFlow.Infrastructure  EF Core, outbox, Kafka publisher, idempotency store
-  OrderFlow.Api             Controllers, error handling, idempotency filter, health
+  OrderFlow.Api             Controllers, error handling, idempotency filter
   OrderFlow.Contracts       Integration event contracts shared with consumers
+  OrderFlow.ServiceDefaults Health endpoints and checks shared by the services
   OrderFlow.Consumer        Kafka consumer, deduplication, Polly pipeline, DLQ
   OrderFlow.WarehouseStub   External system stand-in with configurable failures
 tests/                      Unit and integration tests

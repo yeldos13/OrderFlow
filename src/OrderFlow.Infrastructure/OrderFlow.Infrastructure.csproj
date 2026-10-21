@@ -11,6 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="..\OrderFlow.Application\OrderFlow.Application.csproj" />
     <ProjectReference Include="..\OrderFlow.Contracts\OrderFlow.Contracts.csproj" />
+    <ProjectReference Include="..\OrderFlow.ServiceDefaults\OrderFlow.ServiceDefaults.csproj" />
   </ItemGroup>
 
   <ItemGroup>

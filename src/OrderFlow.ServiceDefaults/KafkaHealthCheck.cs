@@ -1,22 +1,20 @@
 using Confluent.Kafka;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Options;
-using OrderFlow.Consumer.Kafka;
 
-namespace OrderFlow.Consumer.Health;
+namespace OrderFlow.ServiceDefaults;
 
-internal sealed class KafkaHealthCheck : IHealthCheck, IDisposable
+public sealed class KafkaHealthCheck : IHealthCheck, IDisposable
 {
     private static readonly TimeSpan MetadataTimeout = TimeSpan.FromSeconds(3);
 
     private readonly IAdminClient _adminClient;
 
-    public KafkaHealthCheck(IOptions<KafkaConsumerOptions> options)
+    public KafkaHealthCheck(string bootstrapServers, string clientId)
     {
         _adminClient = new AdminClientBuilder(new AdminClientConfig
             {
-                BootstrapServers = options.Value.BootstrapServers,
-                ClientId = $"{options.Value.ClientId}-health"
+                BootstrapServers = bootstrapServers,
+                ClientId = $"{clientId}-health"
             })
             .SetLogHandler((_, _) => { })
             .Build();
