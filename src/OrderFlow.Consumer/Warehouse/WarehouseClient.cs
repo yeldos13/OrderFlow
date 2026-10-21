@@ -22,6 +22,5 @@ public sealed class WarehouseClient(HttpClient httpClient) : IWarehouseClient
     }
 
     private static bool IsRejection(HttpStatusCode statusCode) =>
-        (int)statusCode is >= 400 and < 500
-        && statusCode is not HttpStatusCode.RequestTimeout and not HttpStatusCode.TooManyRequests;
+        statusCode is HttpStatusCode.BadRequest or HttpStatusCode.Conflict or HttpStatusCode.UnprocessableEntity;
 }

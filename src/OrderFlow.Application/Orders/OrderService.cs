@@ -20,7 +20,7 @@ internal sealed partial class OrderService(
         await createOrderValidator.ValidateAndThrowAsync(request, cancellationToken);
 
         var lines = request.Items.Select(item => item.ToOrderLine()).ToList();
-        var order = Order.Create(request.CustomerId, lines, timeProvider.GetUtcNow());
+        var order = Order.Create(request.CustomerId, lines, UtcNow());
 
         dbContext.Orders.Add(order);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -91,11 +91,17 @@ internal sealed partial class OrderService(
             ?? throw new NotFoundException(nameof(Order), id);
 
         var previousStatus = order.Status;
-        change(order, timeProvider.GetUtcNow());
+        change(order, UtcNow());
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
         LogOrderStatusChanged(order.Id, previousStatus, order.Status);
+    }
+
+    private DateTimeOffset UtcNow()
+    {
+        var now = timeProvider.GetUtcNow();
+        return now.AddTicks(-(now.Ticks % TimeSpan.TicksPerMicrosecond));
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Order {OrderId} created for customer {CustomerId} with {ItemCount} items, total {TotalAmount}")]

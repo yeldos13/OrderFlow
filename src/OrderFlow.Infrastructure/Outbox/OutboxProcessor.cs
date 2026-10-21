@@ -16,6 +16,8 @@ internal sealed partial class OutboxProcessor(
     TimeProvider timeProvider,
     ILogger<OutboxProcessor> logger) : BackgroundService
 {
+    internal const long ProcessorLockKey = 7_420_150_001;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(options.Value.PollingInterval, timeProvider);
@@ -39,12 +41,21 @@ internal sealed partial class OutboxProcessor(
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
-    private async Task<int> ProcessBatchAsync(CancellationToken cancellationToken)
+    internal async Task<int> ProcessBatchAsync(CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<OrderFlowDbContext>();
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var acquired = await dbContext.Database
+            .SqlQuery<bool>($"SELECT pg_try_advisory_xact_lock({ProcessorLockKey}) AS \"Value\"")
+            .SingleAsync(cancellationToken);
+
+        if (!acquired)
+        {
+            return 0;
+        }
 
         var batchSize = options.Value.BatchSize;
         var messages = await dbContext.OutboxMessages

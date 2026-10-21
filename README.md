@@ -146,11 +146,12 @@ tests/                      Unit and integration tests
 
 ## Design notes
 
-- **Outbox instead of publishing after `SaveChanges`.** Writing to the database and to Kafka cannot be one transaction; the outbox makes the event part of the order's transaction and publishes it later. Rows are claimed with `FOR UPDATE SKIP LOCKED`, so several API instances can run the processor.
+- **Outbox instead of publishing after `SaveChanges`.** Writing to the database and to Kafka cannot be one transaction; the outbox makes the event part of the order's transaction and publishes it later. A transaction-level advisory lock lets only one API instance process the outbox at a time, so events of one order are never published out of order.
 - **At-least-once, then deduplicate.** Exactly-once across Kafka and an HTTP system is not possible, so the consumer stores processed event ids. The event id is also sent to the warehouse so it can deduplicate the remaining window (crash after delivery, before recording).
 - **Temporary vs permanent errors.** Retrying a malformed message forever blocks the partition; dead lettering a warehouse outage loses data. Errors are classified and handled separately on both the publishing and consuming side.
 - **Ordering.** Events are keyed by order id. On a temporary failure the outbox and the consumer stop and retry the same message rather than skipping ahead.
 - **Separate migration step.** Services do not need schema permissions and do not race each other on startup.
+- **No authentication.** Out of scope on purpose: every endpoint is open, so any caller who knows an order id can change it.
 
 ## Tech stack
 

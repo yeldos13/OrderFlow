@@ -40,6 +40,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         await _postgres.DisposeAsync();
     }
 
+    public string ConnectionStringFor(string database) =>
+        new Npgsql.NpgsqlConnectionStringBuilder(_postgres.GetConnectionString()) { Database = database }.ConnectionString;
+
     public OrderFlowDbContext CreateDbContext() => new(
         new DbContextOptionsBuilder<OrderFlowDbContext>()
             .UseNpgsql(_postgres.GetConnectionString())

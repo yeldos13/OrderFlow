@@ -32,6 +32,7 @@ public sealed class CreateOrderTests(ApiFactory factory)
 
         var stored = await _client.GetFromJsonAsync<OrderDto>($"/api/orders/{order.Id}", OrdersApi.JsonOptions, _cancellationToken);
         Assert.Equal(order.Id, stored!.Id);
+        Assert.Equal(order.CreatedAt, stored.CreatedAt);
         Assert.Single(stored.Items);
 
         var record = Assert.Single(await KafkaTopicReader.ReadByKeyAsync(

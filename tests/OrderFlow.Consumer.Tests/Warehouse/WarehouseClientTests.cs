@@ -35,7 +35,6 @@ public sealed class WarehouseClientTests
 
     [Theory]
     [InlineData(HttpStatusCode.BadRequest)]
-    [InlineData(HttpStatusCode.NotFound)]
     [InlineData(HttpStatusCode.Conflict)]
     [InlineData(HttpStatusCode.UnprocessableEntity)]
     public async Task ClientError_IsRejection(HttpStatusCode statusCode)
@@ -50,6 +49,8 @@ public sealed class WarehouseClientTests
     }
 
     [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.NotFound)]
     [InlineData(HttpStatusCode.RequestTimeout)]
     [InlineData(HttpStatusCode.TooManyRequests)]
     [InlineData(HttpStatusCode.InternalServerError)]
