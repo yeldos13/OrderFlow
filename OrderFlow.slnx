@@ -12,6 +12,7 @@
     <File Path="tests/Directory.Build.props" />
     <File Path="dotnet-tools.json" />
     <File Path="global.json" />
+    <File Path="README.md" />
   </Folder>
   <Project Path="src/OrderFlow.Api/OrderFlow.Api.csproj" />
   <Project Path="src/OrderFlow.Application/OrderFlow.Application.csproj" />
