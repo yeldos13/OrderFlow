@@ -16,6 +16,8 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
+    builder.AddTelemetry();
+
     builder.Services.AddSerilog((services, configuration) => configuration
         .ReadFrom.Configuration(builder.Configuration)
         .ReadFrom.Services(services));
@@ -65,6 +67,7 @@ try
     app.MapControllers();
 
     app.MapHealthEndpoints();
+    app.MapTelemetryEndpoints();
 
     await app.RunAsync();
 }
