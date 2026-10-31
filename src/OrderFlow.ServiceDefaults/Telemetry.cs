@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
@@ -15,6 +16,8 @@ public static class Telemetry
     // Spans for the parts OpenTelemetry has no instrumentation for: outbox publishing and Kafka consumption.
     public static readonly ActivitySource Source = new("OrderFlow");
 
+    public static readonly Meter Meter = new("OrderFlow");
+
     public static IHostApplicationBuilder AddTelemetry(this IHostApplicationBuilder builder)
     {
         builder.Services.AddOpenTelemetry()
@@ -22,7 +25,7 @@ public static class Telemetry
             .WithMetrics(metrics => metrics
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
-                .AddMeter("System.Runtime")
+                .AddMeter("System.Runtime", Meter.Name)
                 .AddPrometheusExporter())
             .WithTracing(tracing =>
             {

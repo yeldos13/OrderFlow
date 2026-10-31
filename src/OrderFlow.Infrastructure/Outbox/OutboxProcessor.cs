@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -19,6 +20,13 @@ internal sealed partial class OutboxProcessor(
     ILogger<OutboxProcessor> logger) : BackgroundService
 {
     internal const long ProcessorLockKey = 7_420_150_001;
+
+    // Read at scrape time (every 15s); the partial index on pending rows keeps the count cheap.
+    private readonly ObservableGauge<int> _pendingGauge = Telemetry.Meter.CreateObservableGauge(
+        "outbox.pending",
+        () => CountPending(scopeFactory),
+        "{message}",
+        "Outbox messages waiting to be published");
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -124,6 +132,13 @@ internal sealed partial class OutboxProcessor(
         }
 
         return (published, rejected);
+    }
+
+    private static int CountPending(IServiceScopeFactory scopeFactory)
+    {
+        using var scope = scopeFactory.CreateScope();
+        return scope.ServiceProvider.GetRequiredService<OrderFlowDbContext>().OutboxMessages
+            .Count(message => message.ProcessedAt == null && message.FailedAt == null);
     }
 
     private OutgoingMessage ToOutgoingMessage(OutboxMessage message, string? traceParent) => new(
