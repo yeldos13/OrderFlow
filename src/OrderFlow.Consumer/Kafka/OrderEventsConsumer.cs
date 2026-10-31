@@ -6,6 +6,7 @@ using OrderFlow.Consumer.Health;
 using OrderFlow.Consumer.Processing;
 using OrderFlow.Consumer.Warehouse;
 using OrderFlow.Contracts;
+using OrderFlow.ServiceDefaults;
 using Polly.CircuitBreaker;
 
 namespace OrderFlow.Consumer.Kafka;
@@ -155,14 +156,24 @@ internal sealed partial class OrderEventsConsumer(
 
     private static Activity StartActivity(ReceivedMessage message)
     {
-        var activity = new Activity("ProcessOrderEvent");
+        ActivityContext.TryParse(message.TraceParent, null, out var parent);
 
-        if (message.TraceParent is not null)
+        var activity = Telemetry.Source.StartActivity("ProcessOrderEvent", ActivityKind.Consumer, parent);
+        if (activity is null)
         {
-            activity.SetParentId(message.TraceParent);
+            // No tracer listens: a plain Activity still gives logs the producer's trace id.
+            activity = new Activity("ProcessOrderEvent");
+            if (message.TraceParent is not null)
+            {
+                activity.SetParentId(message.TraceParent);
+            }
+
+            return activity.Start();
         }
 
-        return activity.Start();
+        activity.SetTag("messaging.system", "kafka");
+        activity.SetTag("messaging.message.id", message.EventId);
+        return activity;
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Partitions assigned: {Partitions}")]

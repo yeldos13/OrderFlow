@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.Options;
 using OrderFlow.Contracts;
 using OrderFlow.Infrastructure.Messaging;
 using OrderFlow.Infrastructure.Persistence;
+using OrderFlow.ServiceDefaults;
 
 namespace OrderFlow.Infrastructure.Outbox;
 
@@ -96,9 +98,14 @@ internal sealed partial class OutboxProcessor(
 
         foreach (var message in messages)
         {
+            ActivityContext.TryParse(message.TraceParent, null, out var parent);
+            using var activity = Telemetry.Source.StartActivity("PublishOrderEvent", ActivityKind.Producer, parent);
+            activity?.SetTag("messaging.system", "kafka");
+            activity?.SetTag("messaging.message.id", message.Id);
+
             try
             {
-                await publisher.PublishAsync(ToOutgoingMessage(message), cancellationToken);
+                await publisher.PublishAsync(ToOutgoingMessage(message, activity?.Id ?? message.TraceParent), cancellationToken);
                 message.MarkProcessed(timeProvider.GetUtcNow());
                 published++;
             }
@@ -119,7 +126,7 @@ internal sealed partial class OutboxProcessor(
         return (published, rejected);
     }
 
-    private OutgoingMessage ToOutgoingMessage(OutboxMessage message) => new(
+    private OutgoingMessage ToOutgoingMessage(OutboxMessage message, string? traceParent) => new(
         options.Value.Topic,
         message.AggregateId.ToString(),
         message.Payload,
@@ -127,7 +134,7 @@ internal sealed partial class OutboxProcessor(
         {
             [MessageHeaders.EventId] = message.Id.ToString(),
             [MessageHeaders.EventType] = message.Type,
-            [MessageHeaders.TraceParent] = message.TraceParent
+            [MessageHeaders.TraceParent] = traceParent
         });
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Published {Count} outbox messages")]
